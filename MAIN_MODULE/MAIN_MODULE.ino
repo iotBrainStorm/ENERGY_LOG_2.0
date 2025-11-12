@@ -909,25 +909,25 @@ void checkWiFiAndStartServer() {
     }
 
     // ✅ Show notification on OLED - PROPERLY refresh display
-    if (!menuActive) {
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_6x12_tf);
-      u8g2.drawStr(0, 12, "WiFi Connected!");
-      u8g2.drawStr(0, 24, "Server Started");
-      u8g2.drawStr(0, 36, "IP:");
-      u8g2.drawStr(0, 48, WiFi.localIP().toString().c_str());
-      u8g2.sendBuffer();
-      delay(2000);
+    // if (!menuActive) {
+    //   u8g2.clearBuffer();
+    //   u8g2.setFont(u8g2_font_6x12_tf);
+    //   u8g2.drawStr(0, 12, "WiFi Connected!");
+    //   u8g2.drawStr(0, 24, "Server Started");
+    //   u8g2.drawStr(0, 36, "IP:");
+    //   u8g2.drawStr(0, 48, WiFi.localIP().toString().c_str());
+    //   u8g2.sendBuffer();
+    //   delay(2000);
 
-      // ✅ IMPORTANT: Force complete redraw
-      u8g2.clearBuffer();  // Clear everything first
-      displayLayout();     // Draw borders
-      displayUnits();      // Draw unit labels
-      u8g2.sendBuffer();   // ✅ Send buffer BEFORE statusbar
+    //   // ✅ IMPORTANT: Force complete redraw
+    //   u8g2.clearBuffer();  // Clear everything first
+    //   displayLayout();     // Draw borders
+    //   displayUnits();      // Draw unit labels
+    //   u8g2.sendBuffer();   // ✅ Send buffer BEFORE statusbar
 
-      // ✅ Now draw statusbar separately
-      displayStatusbar();
-    }
+    //   // ✅ Now draw statusbar separately
+    //   displayStatusbar();
+    // }
 
     // Start Firebase task if enabled
     if (fbSettings.enabled && strlen(fbSettings.host) > 0 && firebaseTask == NULL) {
@@ -1757,7 +1757,7 @@ void handleCloudShareSubmenu(int subIndex) {
     case 4:  // Test Connection
       {
         if (strlen(fbSettings.host) == 0) {
-          showMessage("Setup credentials first!");
+          showMessage("Setup credentials!");
           break;
         }
 
@@ -3141,12 +3141,12 @@ void setup() {
 
   // 13. Start Firebase Task on Core 0
   if (fbSettings.enabled && strlen(fbSettings.host) > 0) {
-    u8g2.clearBuffer();
-    u8g2.setFont(u8g2_font_6x12_tf);
-    u8g2.drawStr(0, 24, "Starting Firebase");
-    u8g2.drawStr(0, 36, "on Core 0...");
-    u8g2.sendBuffer();
-    delay(1000);
+    // u8g2.clearBuffer();
+    // u8g2.setFont(u8g2_font_6x12_tf);
+    // u8g2.drawStr(0, 24, "Starting Firebase");
+    // u8g2.drawStr(0, 36, "on Core 0...");
+    // u8g2.sendBuffer();
+    // delay(1000);
 
     xTaskCreatePinnedToCore(
       firebaseTaskFunction,  // Function to run
@@ -3158,11 +3158,11 @@ void setup() {
       0                      // Core 0 (separate from main loop on Core 1)
     );
 
-    u8g2.clearBuffer();
-    u8g2.drawStr(0, 24, "Firebase Task");
-    u8g2.drawStr(0, 36, "Started!");
-    u8g2.sendBuffer();
-    delay(500);
+    // u8g2.clearBuffer();
+    // u8g2.drawStr(0, 24, "Firebase Task");
+    // u8g2.drawStr(0, 36, "Started!");
+    // u8g2.sendBuffer();
+    // delay(500);
   }
 
   // 14. Show Main Display
