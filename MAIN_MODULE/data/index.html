@@ -20,6 +20,11 @@
           <span class="status-dot"></span>
           <span id="status-text">LIVE MONITORING</span>
         </div>
+        <!-- Output Status Display -->
+        <div class="output-status off" id="output-status">
+          <span class="output-status-dot"></span>
+          <span id="output-status-text">OUTPUT: OFF</span>
+        </div>
       </div>
 
       <!-- Data Display Section -->
@@ -145,10 +150,13 @@
         </div>
       </div>
 
-      <!-- Firebase Setup Button -->
+      <!-- Control Buttons -->
       <div class="firebase-setup-container">
         <button class="btn-firebase-setup" onclick="goToFirebaseSetup()">
           🔥 FIREBASE SETUP
+        </button>
+        <button class="btn-output-control" onclick="showOutputDialog()">
+          🔌 MAIN OUTPUT CONTROL
         </button>
       </div>
 
@@ -163,7 +171,28 @@
       </div>
     </div>
 
+    <!-- Output Control Dialog -->
+    <div class="output-dialog" id="output-dialog">
+      <div class="output-content">
+        <h3>🔌 Main Output Control</h3>
+        <p>Control the main power output relay.</p>
+        <p style="color: #00d4ff; font-weight: 700">
+          Current Status: <span id="current-output-status">--</span>
+        </p>
+        <div class="output-buttons">
+          <button class="btn-output-off" onclick="setOutput(false)">
+            TURN OFF
+          </button>
+          <button class="btn-output-on" onclick="setOutput(true)">
+            TURN ON
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script>
+      let currentOutputState = false;
+
       function updateBar(selector, percentage) {
         const bar = document.querySelector(selector + " .card-bar-fill");
         if (bar) {
@@ -201,6 +230,13 @@
               data.uptime || 0
             ).toFixed(1);
 
+            // Update output status
+            if (data.mainOutput !== undefined) {
+              currentOutputState =
+                data.mainOutput === 1 || data.mainOutput === true;
+              updateOutputStatus(currentOutputState);
+            }
+
             // Update progress bars
             updateBar(".voltage-bar", (parseFloat(data.voltage) / 300) * 100);
             updateBar(".current-bar", (parseFloat(data.current) / 30) * 100);
@@ -233,6 +269,56 @@
         document.getElementById("last-update").textContent = timeStr;
       }
 
+      function updateOutputStatus(state) {
+        const statusElement = document.getElementById("output-status");
+        const statusText = document.getElementById("output-status-text");
+
+        if (state) {
+          statusElement.className = "output-status on";
+          statusText.textContent = "OUTPUT: ON";
+        } else {
+          statusElement.className = "output-status off";
+          statusText.textContent = "OUTPUT: OFF";
+        }
+      }
+
+      function showOutputDialog() {
+        const dialog = document.getElementById("output-dialog");
+        const currentStatus = document.getElementById("current-output-status");
+        currentStatus.textContent = currentOutputState ? "ON" : "OFF";
+        dialog.classList.add("show");
+      }
+
+      function closeOutputDialog() {
+        document.getElementById("output-dialog").classList.remove("show");
+      }
+
+      function setOutput(state) {
+        fetch("/output/set", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ state: state }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              currentOutputState = state;
+              updateOutputStatus(state);
+              closeOutputDialog();
+              // Update immediately
+              updateSensorValues();
+            } else {
+              alert("Failed to control output!");
+            }
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            alert("Error controlling output!");
+          });
+      }
+
       function createParticles() {
         const container = document.querySelector(".particles");
         if (!container) return;
@@ -250,6 +336,13 @@
       function goToFirebaseSetup() {
         window.location.href = "/firebase";
       }
+
+      // Close dialog on ESC key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          closeOutputDialog();
+        }
+      });
 
       // Initialize on page load
       document.addEventListener("DOMContentLoaded", () => {

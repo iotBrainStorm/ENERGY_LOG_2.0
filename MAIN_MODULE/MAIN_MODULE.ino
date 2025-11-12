@@ -27,6 +27,7 @@
 
 // -- Web Server
 AsyncWebServer server(80);
+bool webServerStarted = false;
 
 // -- Display Refresh time
 #define DISPLAY_REFRESH_INTERVAL 1000  // ms
@@ -326,52 +327,39 @@ void displayUnits() {
 
 void displayStatusbar() {
   u8g2.setFont(u8g2_font_t0_11_tr);
+
+  // ✅ WiFi Status
+  clearLCD(58, 52, 9, 9);
   if (WiFi.status() == WL_CONNECTED) {
-    clearLCD(58, 52, 9, 9);
-    u8g2.drawStr(59, 61, "W");  //for wifi connection
-    u8g2.sendBuffer();
-  } else {
-    clearLCD(58, 52, 9, 9);
-    u8g2.sendBuffer();
+    u8g2.drawStr(59, 61, "W");
   }
 
+  // Node-Red Status
+  clearLCD(70, 52, 9, 9);
   if (settings.nodeRedEnabled) {
-    clearLCD(70, 52, 9, 9);
-    u8g2.drawStr(72, 61, "R");  //for node red connection
-    u8g2.sendBuffer();
-  } else {
-    clearLCD(70, 52, 9, 9);
-    u8g2.sendBuffer();
+    u8g2.drawStr(72, 61, "R");
   }
 
+  // Firebase Status
+  clearLCD(86, 52, 12, 9);
   if (fbSettings.enabled) {
-    clearLCD(86, 52, 12, 9);
-    u8g2.drawStr(85, 61, "FB");  //for firebase connection
-    u8g2.sendBuffer();
-  } else {
-    clearLCD(86, 52, 12, 9);
-    u8g2.sendBuffer();
+    u8g2.drawStr(85, 61, "FB");
   }
 
-  // Protection Status - Show 'P' if any protection is active
+  // Protection Status
+  clearLCD(103, 52, 9, 9);
   if (settings.highVProtec || settings.LowVProtec || settings.highPProtec || settings.highHzProtec || settings.lowHzProtec) {
-    clearLCD(103, 52, 9, 9);
     u8g2.drawStr(105, 61, "P");
-    u8g2.sendBuffer();
-  } else {
-    clearLCD(103, 52, 9, 9);
-    u8g2.sendBuffer();
   }
 
-  // Alert Status - Show 'A' if any alert is active
+  // Alert Status
+  clearLCD(117, 52, 9, 9);
   if (settings.highVoltageAlert || settings.lowVoltageAlert || settings.highPowerAlert || settings.lowPowerAlert || settings.highFreqAlert || settings.lowFreqAlert) {
-    clearLCD(117, 52, 9, 9);
     u8g2.drawStr(119, 61, "A");
-    u8g2.sendBuffer();
-  } else {
-    clearLCD(117, 52, 9, 9);
-    u8g2.sendBuffer();
   }
+
+  // ✅ IMPORTANT: Send buffer after drawing all status icons
+  u8g2.sendBuffer();
 }
 
 bool connectToSavedWiFi() {
@@ -383,16 +371,19 @@ bool connectToSavedWiFi() {
   WiFiManager wm;
   bool success = false;
 
+  // ✅ Always set WiFi mode and begin - even if no saved credentials
   WiFi.mode(WIFI_STA);
-  WiFi.begin();  // Try to connect to saved network
+  WiFi.begin();  // This initializes WiFi stack
 
   int attempts = 0;
   const int MAX_ATTEMPTS = 5;
 
   while (attempts < MAX_ATTEMPTS) {
-
     char attemptStr[16];
     snprintf(attemptStr, 16, "Attempt: %d/5", attempts + 1);
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x12_tf);
+    u8g2.drawStr(0, 12, "Connecting WiFi...");
     u8g2.drawStr(0, 24, attemptStr);
     u8g2.sendBuffer();
 
@@ -413,36 +404,16 @@ bool connectToSavedWiFi() {
     attempts++;
   }
 
-  // If not connected, start WiFiManager config portal
+  // ✅ Don't show AP portal during startup - just note WiFi not available
   u8g2.clearBuffer();
-  u8g2.drawStr(0, 12, "No Saved WiFi!");
-  u8g2.drawStr(0, 24, "Starting AP...");
-  u8g2.drawStr(0, 36, "AP IP:");
-  u8g2.drawStr(0, 48, "192.168.4.1");
-  u8g2.drawStr(0, 60, "Connect & Setup");
+  u8g2.drawStr(0, 12, "No WiFi Found");
+  u8g2.drawStr(0, 24, "Will auto-connect");
+  u8g2.drawStr(0, 36, "when available");
+  u8g2.drawStr(0, 48, "or use menu");
   u8g2.sendBuffer();
-  delay(1500);
+  delay(2000);
 
-  wm.setConfigPortalTimeout(60);              // 60 seconds timeout
-  success = wm.autoConnect("ESP.EnergyLog");  // Start AP
-
-  if (success) {
-    u8g2.clearBuffer();
-    u8g2.drawStr(0, 12, "WiFi Connected!");
-    u8g2.drawStr(0, 24, "SSID:");
-    u8g2.drawStr(0, 36, WiFi.SSID().c_str());
-    u8g2.drawStr(0, 48, "IP:");
-    u8g2.drawStr(0, 60, WiFi.localIP().toString().c_str());
-    u8g2.sendBuffer();
-    delay(2000);
-    return true;
-  } else {
-    u8g2.clearBuffer();
-    u8g2.drawStr(0, 12, "Time over!");
-    u8g2.sendBuffer();
-    delay(1000);
-    return true;
-  }
+  return false;  // ✅ Return false but WiFi stack is initialized
 }
 
 void performSafetyCheck() {
@@ -559,7 +530,6 @@ void performSafetyCheck() {
 
 // 9. Main Output
 void controlMainOutput() {
-
   portENTER_CRITICAL(&measureMux);
   Measurements current = readings;
   portEXIT_CRITICAL(&measureMux);
@@ -567,19 +537,25 @@ void controlMainOutput() {
   bool currentProtectionActive = false;
   static bool waitingForDelay = false;
 
-  // Check other conditions
+  // ✅ FIRST: Check if manually turned OFF from menu
   if (!settings.mainOutput) {
     shouldTurnOff = true;
+    digitalWrite(MAIN_RELAY, HIGH);  // ✅ Turn OFF relay immediately
+
     if (!menuActive) {
       clearLCD(57, 41, 69, 10);
       u8g2.setFont(u8g2_font_t0_11_tr);
       u8g2.drawStr(59, 50, "MAIN: OFF");
       u8g2.sendBuffer();
     }
-    return;
+    return;  // ✅ Exit early - don't check other conditions
+  }
 
-  } else if (settings.kWhSaver && current.energy >= settings.maxkWh) {
+  // ✅ THEN: Check kWh Saver
+  if (settings.kWhSaver && current.energy >= settings.maxkWh) {
     shouldTurnOff = true;
+    digitalWrite(MAIN_RELAY, HIGH);  // Turn OFF
+
     if (!menuActive) {
       clearLCD(57, 41, 69, 10);
       u8g2.setFont(u8g2_font_t0_11_tr);
@@ -587,35 +563,41 @@ void controlMainOutput() {
       u8g2.sendBuffer();
     }
     return;
+  }
 
-  } else if ((settings.highVProtec && current.voltage > settings.voltHigh) || (settings.LowVProtec && current.voltage < settings.voltLow) || (settings.highPProtec && current.power > settings.powerHigh) || (settings.highHzProtec && current.frequency > settings.freqHigh) || (settings.lowHzProtec && current.frequency < settings.freqLow)) {
+  // ✅ THEN: Check Protection conditions
+  if ((settings.highVProtec && current.voltage > settings.voltHigh) || (settings.LowVProtec && current.voltage < settings.voltLow) || (settings.highPProtec && current.power > settings.powerHigh) || (settings.highHzProtec && current.frequency > settings.freqHigh) || (settings.lowHzProtec && current.frequency < settings.freqLow)) {
+
     currentProtectionActive = true;
-    waitingForDelay = false;  // Reset wait state if protection active again
+    waitingForDelay = false;
+    digitalWrite(MAIN_RELAY, HIGH);  // Turn OFF
+
     if (!menuActive) {
       clearLCD(57, 41, 69, 10);
       u8g2.setFont(u8g2_font_t0_11_tr);
       u8g2.drawStr(59, 50, "PRO. TRIG.");
       u8g2.sendBuffer();
     }
+    shouldTurnOff = true;
 
   } else {
     shouldTurnOff = false;
   }
 
-  // Handle protection states and timing
+  // Handle protection delay timer
   if (currentProtectionActive) {
     protectionWasActive = true;
-    protectionClearedTime = millis();  // Update time while protection is active
+    protectionClearedTime = millis();
     shouldTurnOff = true;
+    digitalWrite(MAIN_RELAY, HIGH);  // Keep OFF
+
   } else if (protectionWasActive) {
-    // Protection cleared but we're in waiting period
+    // Protection cleared but waiting for delay
     if (!waitingForDelay) {
-      // First time entering wait state
       protectionClearedTime = millis();
       waitingForDelay = true;
     }
 
-    // Calculate remaining wait time
     unsigned long elapsedTime = millis() - protectionClearedTime;
     unsigned long remainingTime = PROTECTION_DELAY - elapsedTime;
     int minutes = remainingTime / 60000;
@@ -626,8 +608,11 @@ void controlMainOutput() {
       protectionWasActive = false;
       waitingForDelay = false;
       shouldTurnOff = false;
+      digitalWrite(MAIN_RELAY, LOW);  // ✅ Turn ON after delay
     } else {
-      shouldTurnOff = true;  // Keep relay OFF during wait
+      shouldTurnOff = true;
+      digitalWrite(MAIN_RELAY, HIGH);  // Keep OFF during wait
+
       char timeStr[32];
       snprintf(timeStr, sizeof(timeStr), "Wait: %02d:%02d", minutes, seconds);
       if (!menuActive) {
@@ -637,12 +622,12 @@ void controlMainOutput() {
         u8g2.sendBuffer();
       }
     }
-  } else {
-    shouldTurnOff = false;
-  }
 
-  // Control relay based on final state
-  digitalWrite(MAIN_RELAY, shouldTurnOff ? HIGH : LOW);
+  } else {
+    // ✅ All conditions OK - Turn relay ON
+    shouldTurnOff = false;
+    digitalWrite(MAIN_RELAY, LOW);
+  }
 }
 
 void displayValues() {
@@ -799,27 +784,216 @@ void updatePzemReadings() {
 }
 
 // 11. Async Web Server
-void handleGetData(AsyncWebServerRequest* request) {
-  AsyncResponseStream* response = request->beginResponseStream("application/json");
-  StaticJsonDocument<200> jsonDoc;
+// void handleGetData(AsyncWebServerRequest* request) {
+//   AsyncResponseStream* response = request->beginResponseStream("application/json");
+//   StaticJsonDocument<200> jsonDoc;
 
-  // Take mutex before reading values
-  portENTER_CRITICAL(&measureMux);
-  Measurements current = readings;  // Take a snapshot
-  portEXIT_CRITICAL(&measureMux);
+//   // Take mutex before reading values
+//   portENTER_CRITICAL(&measureMux);
+//   Measurements current = readings;  // Take a snapshot
+//   portEXIT_CRITICAL(&measureMux);
 
-  // Use snapshot values
-  jsonDoc["voltage"] = String(current.voltage, 1);
-  jsonDoc["current"] = String(current.current, 2);
-  jsonDoc["power"] = String(current.power, 1);
-  jsonDoc["energy"] = String(current.energy, 2);
-  jsonDoc["frequency"] = String(current.frequency, 2);
-  jsonDoc["pf"] = String(current.pf, 2);
-  jsonDoc["days"] = String(current.totalDays, 1);
-  jsonDoc["uptime"] = String(current.uptime, 1);
+//   // Use snapshot values
+//   jsonDoc["voltage"] = String(current.voltage, 1);
+//   jsonDoc["current"] = String(current.current, 2);
+//   jsonDoc["power"] = String(current.power, 1);
+//   jsonDoc["energy"] = String(current.energy, 2);
+//   jsonDoc["frequency"] = String(current.frequency, 2);
+//   jsonDoc["pf"] = String(current.pf, 2);
+//   jsonDoc["days"] = String(current.totalDays, 1);
+//   jsonDoc["uptime"] = String(current.uptime, 1);
 
-  serializeJson(jsonDoc, *response);
-  request->send(response);
+//   serializeJson(jsonDoc, *response);
+//   request->send(response);
+// }
+
+// function to setup and start web server
+void setupWebServer() {
+  if (webServerStarted) return;  // Already started
+
+  Serial.println("Setting up web server...");
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
+    request->send(SPIFFS, "/index.html", "text/html");
+  });
+
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest* request) {
+    request->send(SPIFFS, "/style.css", "text/css");
+  });
+
+  server.on("/table.svg", HTTP_GET, [](AsyncWebServerRequest* request) {
+    request->send(SPIFFS, "/table.svg", "image/svg+xml");
+  });
+
+  server.on("/plug_icon.svg", HTTP_GET, [](AsyncWebServerRequest* request) {
+    request->send(SPIFFS, "/plug_icon.svg", "image/svg+xml");
+  });
+
+  server.on("/sensor.json", HTTP_GET, [](AsyncWebServerRequest* request) {
+    portENTER_CRITICAL(&measureMux);
+    Measurements current = readings;
+    portEXIT_CRITICAL(&measureMux);
+
+    StaticJsonDocument<512> doc;
+    doc["voltage"] = String(current.voltage, 1);
+    doc["current"] = String(current.current, 2);
+    doc["power"] = String(current.power, 1);
+    doc["energy"] = String(current.energy, 2);
+    doc["frequency"] = String(current.frequency, 2);
+    doc["pf"] = String(current.pf, 2);
+    doc["uptime"] = String(current.uptime, 1);
+    doc["days"] = String(current.totalDays, 1);
+    doc["mainOutput"] = settings.mainOutput ? 1 : 0;
+
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+  });
+
+  // Main Output Control Route - SET new state
+  server.on(
+    "/output/set", HTTP_POST, [](AsyncWebServerRequest* request) {}, NULL,
+    [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+      StaticJsonDocument<200> doc;
+      DeserializationError error = deserializeJson(doc, (const char*)data);
+
+      if (!error) {
+        bool state = doc["state"];
+        bool previousState = settings.mainOutput;
+
+        settings.mainOutput = state;
+        saveSettings();
+
+        // Control relay pin
+        digitalWrite(MAIN_RELAY, state ? LOW : HIGH);
+
+        Serial.printf("Web Control: Output set to %s\n", state ? "ON" : "OFF");
+
+        // Send success response
+        StaticJsonDocument<100> response;
+        response["success"] = true;
+        response["mainOutput"] = state ? 1 : 0;
+
+        String jsonResponse;
+        serializeJson(response, jsonResponse);
+        request->send(200, "application/json", jsonResponse);
+      } else {
+        request->send(400, "application/json", "{\"success\":false,\"error\":\"Invalid JSON\"}");
+      }
+    });
+
+  server.begin();
+  webServerStarted = true;
+  Serial.println("Web server started successfully");
+}
+
+// Add this function to check WiFi and start server if needed
+// Enhanced checkWiFiAndStartServer() with proper notification display
+void checkWiFiAndStartServer() {
+  static unsigned long lastCheck = 0;
+  static bool wasConnected = false;
+  static bool reconnecting = false;
+
+  // Check every 5 seconds
+  if (millis() - lastCheck < 5000) return;
+  lastCheck = millis();
+
+  bool isConnected = (WiFi.status() == WL_CONNECTED);
+
+  // WiFi just connected (first time or reconnected)
+  if (isConnected && !wasConnected) {
+    Serial.println("WiFi connected! Starting services...");
+
+    if (!webServerStarted) {
+      setupWebServer();
+    }
+
+    // ✅ Show notification on OLED - PROPERLY refresh display
+    if (!menuActive) {
+      u8g2.clearBuffer();
+      u8g2.setFont(u8g2_font_6x12_tf);
+      u8g2.drawStr(0, 12, "WiFi Connected!");
+      u8g2.drawStr(0, 24, "Server Started");
+      u8g2.drawStr(0, 36, "IP:");
+      u8g2.drawStr(0, 48, WiFi.localIP().toString().c_str());
+      u8g2.sendBuffer();
+      delay(2000);
+
+      // ✅ IMPORTANT: Force complete redraw
+      u8g2.clearBuffer();  // Clear everything first
+      displayLayout();     // Draw borders
+      displayUnits();      // Draw unit labels
+      u8g2.sendBuffer();   // ✅ Send buffer BEFORE statusbar
+
+      // ✅ Now draw statusbar separately
+      displayStatusbar();
+    }
+
+    // Start Firebase task if enabled
+    if (fbSettings.enabled && strlen(fbSettings.host) > 0 && firebaseTask == NULL) {
+      Serial.println("Starting Firebase task...");
+      xTaskCreatePinnedToCore(
+        firebaseTaskFunction,
+        "FirebaseTask",
+        8192,
+        NULL,
+        1,
+        &firebaseTask,
+        0);
+    }
+
+    reconnecting = false;
+  }
+
+  // WiFi disconnected - try to reconnect
+  if (!isConnected && wasConnected) {
+    Serial.println("WiFi disconnected - will attempt reconnection");
+
+    // Stop Firebase task
+    if (firebaseTask != NULL) {
+      vTaskDelete(firebaseTask);
+      firebaseTask = NULL;
+      Serial.println("Firebase task stopped");
+    }
+
+    reconnecting = true;
+  }
+
+  // ✅ Active reconnection attempts when disconnected
+  if (!isConnected && reconnecting) {
+    static unsigned long lastReconnectAttempt = 0;
+
+    // Try reconnecting every 30 seconds
+    if (millis() - lastReconnectAttempt > 30000) {
+      lastReconnectAttempt = millis();
+
+      Serial.println("Attempting WiFi reconnection...");
+
+      // ✅ Show reconnecting status with proper display refresh
+      if (!menuActive) {
+        // Force reconnection attempt
+        WiFi.disconnect();
+        delay(100);
+        WiFi.begin();  // ✅ Reconnect to saved credentials
+
+        // Redraw layout after reconnection attempt
+        u8g2.clearBuffer();
+        displayLayout();
+        displayUnits();
+        u8g2.sendBuffer();
+
+        // Update statusbar
+        displayStatusbar();
+      } else {
+        // Just reconnect without display update if in menu
+        WiFi.disconnect();
+        delay(100);
+        WiFi.begin();
+      }
+    }
+  }
+
+  wasConnected = isConnected;
 }
 
 // 12. Satety Features
@@ -1752,9 +1926,22 @@ void handleSafetyProtectionSubmenu(int subIndex) {
 void handleMainOutputSubmenu(int subIndex) {
   switch (subIndex) {
     case 1:  // Enable/Disable
-      showConfirmDialog("Enable Output?", settings.mainOutput);
-      saveSettings();
-      showMessage(settings.mainOutput ? "Output Enabled" : "Output Disabled");
+      {
+        bool previousState = settings.mainOutput;
+        showConfirmDialog("Enable Output?", settings.mainOutput);
+        saveSettings();
+
+        // ✅ Control relay immediately
+        digitalWrite(MAIN_RELAY, settings.mainOutput ? LOW : HIGH);
+
+        // ✅ Reset protection states when manually enabling
+        if (settings.mainOutput) {
+          protectionWasActive = false;
+          shouldTurnOff = false;
+        }
+
+        showMessage(settings.mainOutput ? "Output Enabled" : "Output Disabled");
+      }
       break;
 
     case 2:  // kWh Saver
@@ -2433,6 +2620,7 @@ void resetFirebaseSettings() {
 }
 
 // Add new function to test Firebase connection with one upload
+// Modified testFirebaseConnection() to include output
 bool testFirebaseConnection() {
   if (strlen(fbSettings.host) == 0 || strlen(fbSettings.auth) == 0) {
     lastFirebaseResponse = "No credentials";
@@ -2447,7 +2635,7 @@ bool testFirebaseConnection() {
   // Build Firebase URL
   String url = String(fbSettings.host);
   if (!url.endsWith("/")) url += "/";
-  url += "energy_data_test.json?auth=" + String(fbSettings.auth);
+  url += "energy_data.json?auth=" + String(fbSettings.auth);
 
   // Create test JSON payload
   StaticJsonDocument<512> doc;
@@ -2463,16 +2651,13 @@ bool testFirebaseConnection() {
   String jsonPayload;
   serializeJson(doc, jsonPayload);
 
-  // Use HTTPClient to test
   HTTPClient http;
   http.begin(url);
-  http.setTimeout(10000);  // 10 second timeout for test
+  http.setTimeout(10000);
   http.addHeader("Content-Type", "application/json");
 
   Serial.println("Testing Firebase connection...");
-  Serial.println("URL: " + url);
-
-  int httpCode = http.PUT(jsonPayload);
+  int httpCode = http.sendRequest("PATCH", jsonPayload);
 
   bool success = false;
   if (httpCode > 0) {
@@ -2618,6 +2803,7 @@ void sendDataToFirebase() {
   if (!fbSettings.enabled || strlen(fbSettings.host) == 0) return;
   if (WiFi.status() != WL_CONNECTED) return;
 
+
   // Get snapshot with mutex
   portENTER_CRITICAL(&measureMux);
   Measurements current = readings;
@@ -2650,7 +2836,8 @@ void sendDataToFirebase() {
   http.addHeader("Content-Type", "application/json");
 
   Serial.println("[Firebase Core 0] Sending data...");
-  int httpCode = http.PUT(jsonPayload);
+  // ✅ Use PATCH to merge data
+  int httpCode = http.sendRequest("PATCH", jsonPayload);
 
   if (httpCode > 0) {
     if (httpCode == HTTP_CODE_OK || httpCode == 200) {
@@ -2913,51 +3100,16 @@ void setup() {
   configDateTime();
   delay(300);
 
-  // In setup(), replace the web server section with:
-  // 10. Start Web server
-  if ((WiFi.status() == WL_CONNECTED)) {
-    // Show server starting message
+  // 10. Start Web server (only if WiFi connected at startup)
+  if (WiFi.status() == WL_CONNECTED) {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x12_tf);
     u8g2.drawStr(0, 12, "Starting Server...");
     u8g2.sendBuffer();
     delay(300);
 
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest* request) {
-      request->send(SPIFFS, "/index.html", "text/html");
-    });
+    setupWebServer();  // ← Use the new function
 
-    // Show routes setup progress
-    u8g2.drawStr(0, 24, "Setting routes...");
-    u8g2.sendBuffer();
-    delay(200);
-
-    // Routes for static files
-    server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest* request) {
-      request->send(SPIFFS, "/style.css", "text/css");
-    });
-    u8g2.drawStr(0, 36, "/style.css");
-    u8g2.sendBuffer();
-    delay(100);
-
-    server.on("/table.svg", HTTP_GET, [](AsyncWebServerRequest* request) {
-      request->send(SPIFFS, "/table.svg", "image/svg+xml");
-    });
-    u8g2.drawStr(0, 48, "/table.svg");
-    u8g2.sendBuffer();
-    delay(100);
-
-    server.on("/plug_icon.svg", HTTP_GET, [](AsyncWebServerRequest* request) {
-      request->send(SPIFFS, "/plug_icon.svg", "image/svg+xml");
-    });
-    u8g2.drawStr(0, 60, "/plug_icon.svg");
-    u8g2.sendBuffer();
-    delay(100);
-
-    server.on("/sensor.json", HTTP_GET, handleGetData);
-    server.begin();
-
-    // Show success message with IP
     u8g2.clearBuffer();
     u8g2.drawStr(0, 12, "Server Started!");
     u8g2.drawStr(0, 24, "IP Address:");
@@ -2966,15 +3118,13 @@ void setup() {
     delay(2000);
 
   } else {
-    // Show offline mode message
     u8g2.clearBuffer();
     u8g2.drawStr(0, 12, "WiFi Failed!");
-    u8g2.drawStr(0, 24, "Starting in");
-    u8g2.drawStr(0, 36, "Offline Mode");
+    u8g2.drawStr(0, 24, "Will auto-start");
+    u8g2.drawStr(0, 36, "when connected");
     u8g2.sendBuffer();
     delay(2000);
   }
-  // Start PZEM
 
 
   // 11. System Ready
@@ -3027,6 +3177,7 @@ void loop() {
   saveTotalDays();
   sendDataToNodeRed();
   shareData();
+  checkWiFiAndStartServer();
 
   if (!menuActive && buttonPressed()) {
     menuActive = true;
