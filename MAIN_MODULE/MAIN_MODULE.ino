@@ -869,6 +869,11 @@ void setupWebServer() {
 
         Serial.printf("Web Control: Output set to %s\n", state ? "ON" : "OFF");
 
+        // Push to Firebase only on change
+        if (fbSettings.enabled && WiFi.status() == WL_CONNECTED && previousState != state) {
+          writeOutputToFirebase(state);
+        }
+
         // Send success response
         StaticJsonDocument<100> response;
         response["success"] = true;
@@ -1940,6 +1945,11 @@ void handleMainOutputSubmenu(int subIndex) {
           shouldTurnOff = false;
         }
 
+        // Push to Firebase only on change, only if enabled
+        if (fbSettings.enabled && WiFi.status() == WL_CONNECTED && settings.mainOutput != previousState) {
+          writeOutputToFirebase(settings.mainOutput);
+        }
+
         showMessage(settings.mainOutput ? "Output Enabled" : "Output Disabled");
       }
       break;
@@ -2797,12 +2807,72 @@ void startFirebaseConfigPortal() {
   }
 }
 
+// Helper: write output state to Firebase (1/0)
+bool writeOutputToFirebase(bool state) {
+  if (!fbSettings.enabled || strlen(fbSettings.host) == 0) return false;
+  if (WiFi.status() != WL_CONNECTED) return false;
+
+  String url = String(fbSettings.host);
+  if (!url.endsWith("/")) url += "/";
+  url += "energy_data/output.json?auth=" + String(fbSettings.auth);
+
+  HTTPClient http;
+  http.begin(url);
+  http.setTimeout(5000);
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = state ? "1" : "0";  // number, not string
+  int httpCode = http.PUT(payload);
+  bool ok = (httpCode == 200 || httpCode == HTTP_CODE_OK);
+  if (!ok) Serial.printf("[FB] write output failed: %d\n", httpCode);
+  http.end();
+  return ok;
+}
+
+// Helper: read output state from Firebase ONCE (used only in sendDataToFirebase)
+void readOutputFromFirebase() {
+  if (!fbSettings.enabled || strlen(fbSettings.host) == 0) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  String url = String(fbSettings.host);
+  if (!url.endsWith("/")) url += "/";
+  url += "energy_data/output.json?auth=" + String(fbSettings.auth);
+
+  HTTPClient http;
+  http.begin(url);
+  http.setTimeout(4000);
+  int httpCode = http.GET();
+
+  if (httpCode == 200 || httpCode == HTTP_CODE_OK) {
+    String payload = http.getString();
+    payload.trim();
+    int val = -1;
+    if (payload == "1" || payload.equalsIgnoreCase("true")) val = 1;
+    else if (payload == "0" || payload.equalsIgnoreCase("false")) val = 0;
+
+    if (val == 0 || val == 1) {
+      bool newState = (val == 1);
+      if (settings.mainOutput != newState) {
+        settings.mainOutput = newState;
+        saveSettings();
+        digitalWrite(MAIN_RELAY, settings.mainOutput ? LOW : HIGH);  // active-low
+        Serial.printf("[FB] pulled output=%d and applied\n", val);
+      }
+    }
+  } else {
+    Serial.printf("[FB] read output failed: %d\n", httpCode);
+  }
+  http.end();
+}
+
 // Send data to Firebase
 void sendDataToFirebase() {
   // Remove static timing check since task handles interval
   if (!fbSettings.enabled || strlen(fbSettings.host) == 0) return;
   if (WiFi.status() != WL_CONNECTED) return;
 
+  // Read output from Firebase only at this moment (lazy pull)
+  readOutputFromFirebase();
 
   // Get snapshot with mutex
   portENTER_CRITICAL(&measureMux);
@@ -2825,6 +2895,7 @@ void sendDataToFirebase() {
   doc["pf"] = String(current.pf, 2);
   doc["uptime"] = String(current.uptime, 1);
   doc["totalDays"] = String(current.totalDays, 1);
+  doc["output"] = settings.mainOutput ? 1 : 0;
 
   String jsonPayload;
   serializeJson(doc, jsonPayload);
