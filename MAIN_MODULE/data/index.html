@@ -7,6 +7,7 @@
     <title>Energy Monitor</title>
     <link rel="icon" type="image/svg+xml" href="plug_icon.svg" />
     <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   </head>
 
   <body>
@@ -30,7 +31,10 @@
       <!-- Data Display Section -->
       <div class="data-grid">
         <!-- Voltage Card -->
-        <div class="data-card voltage-card">
+        <div
+          class="data-card voltage-card"
+          onclick="openDetailView('voltage', 'Voltage', 'V', '⚡')"
+        >
           <div class="card-label">
             <span class="icon">⚡</span>
             <span>VOLTAGE</span>
@@ -45,7 +49,10 @@
         </div>
 
         <!-- Current Card -->
-        <div class="data-card current-card">
+        <div
+          class="data-card current-card"
+          onclick="openDetailView('current', 'Current', 'A', '🔌')"
+        >
           <div class="card-label">
             <span class="icon">🔌</span>
             <span>CURRENT</span>
@@ -60,7 +67,10 @@
         </div>
 
         <!-- Power Card -->
-        <div class="data-card power-card">
+        <div
+          class="data-card power-card"
+          onclick="openDetailView('power', 'Power', 'W', '💡')"
+        >
           <div class="card-label">
             <span class="icon">💡</span>
             <span>POWER</span>
@@ -75,7 +85,10 @@
         </div>
 
         <!-- Energy Card -->
-        <div class="data-card energy-card">
+        <div
+          class="data-card energy-card"
+          onclick="openDetailView('energy', 'Energy', 'kWh', '🔋')"
+        >
           <div class="card-label">
             <span class="icon">🔋</span>
             <span>ENERGY</span>
@@ -90,7 +103,10 @@
         </div>
 
         <!-- Power Factor Card -->
-        <div class="data-card pf-card">
+        <div
+          class="data-card pf-card"
+          onclick="openDetailView('pf', 'Power Factor', 'PF', '📊')"
+        >
           <div class="card-label">
             <span class="icon">📊</span>
             <span>POWER FACTOR</span>
@@ -105,7 +121,10 @@
         </div>
 
         <!-- Frequency Card -->
-        <div class="data-card frequency-card">
+        <div
+          class="data-card frequency-card"
+          onclick="openDetailView('frequency', 'Frequency', 'Hz', '〰️')"
+        >
           <div class="card-label">
             <span class="icon">〰️</span>
             <span>FREQUENCY</span>
@@ -120,7 +139,10 @@
         </div>
 
         <!-- Runtime Card -->
-        <div class="data-card days-card">
+        <div
+          class="data-card days-card"
+          onclick="openDetailView('days', 'Runtime', 'Days', '📅')"
+        >
           <div class="card-label">
             <span class="icon">📅</span>
             <span>RUNTIME</span>
@@ -135,7 +157,10 @@
         </div>
 
         <!-- Uptime Card -->
-        <div class="data-card uptime-card">
+        <div
+          class="data-card uptime-card"
+          onclick="openDetailView('uptime', 'Uptime', 'Hrs', '⏱️')"
+        >
           <div class="card-label">
             <span class="icon">⏱️</span>
             <span>UPTIME</span>
@@ -190,8 +215,84 @@
       </div>
     </div>
 
+    <!-- Detail View Modal -->
+    <div class="detail-modal" id="detail-modal">
+      <div class="detail-content">
+        <div class="detail-header">
+          <div class="detail-title">
+            <span class="detail-icon" id="detail-icon">⚡</span>
+            <h2 id="detail-name">Voltage</h2>
+          </div>
+          <button class="close-btn" onclick="closeDetailView()">✕</button>
+        </div>
+
+        <div class="detail-stats">
+          <div class="stat-box current-value">
+            <div class="stat-label">CURRENT</div>
+            <div class="stat-value">
+              <span id="detail-current-value">0.0</span>
+              <span class="stat-unit" id="detail-unit">V</span>
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">AVERAGE</div>
+            <div class="stat-value">
+              <span id="detail-avg-value">0.0</span>
+              <span class="stat-unit" id="detail-unit-avg">V</span>
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">MIN</div>
+            <div class="stat-value">
+              <span id="detail-min-value">0.0</span>
+              <span class="stat-unit" id="detail-unit-min">V</span>
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">MAX</div>
+            <div class="stat-value">
+              <span id="detail-max-value">0.0</span>
+              <span class="stat-unit" id="detail-unit-max">V</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <canvas id="detail-chart"></canvas>
+        </div>
+
+        <div class="time-controls">
+          <button class="time-btn active" onclick="changeTimeRange(60)">
+            1 Min
+          </button>
+          <button class="time-btn" onclick="changeTimeRange(300)">5 Min</button>
+          <button class="time-btn" onclick="changeTimeRange(600)">
+            10 Min
+          </button>
+          <button class="time-btn" onclick="changeTimeRange(1800)">
+            30 Min
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script>
       let currentOutputState = false;
+      let chartInstance = null;
+      let currentMetric = null;
+      let dataHistory = {
+        voltage: [],
+        current: [],
+        power: [],
+        energy: [],
+        pf: [],
+        frequency: [],
+        days: [],
+        uptime: [],
+        timestamps: [],
+      };
+      let maxDataPoints = 1800; // 30 minutes at 1 second intervals
+      let currentTimeRange = 60; // Default 1 minute
 
       function updateBar(selector, percentage) {
         const bar = document.querySelector(selector + " .card-bar-fill");
@@ -204,31 +305,46 @@
         fetch("/sensor.json")
           .then((response) => response.json())
           .then((data) => {
-            // Update values
-            document.getElementById("voltage").textContent = parseFloat(
-              data.voltage || 0
-            ).toFixed(1);
-            document.getElementById("current").textContent = parseFloat(
-              data.current || 0
-            ).toFixed(2);
-            document.getElementById("power").textContent = parseFloat(
-              data.power || 0
-            ).toFixed(1);
-            document.getElementById("energy").textContent = parseFloat(
-              data.energy || 0
-            ).toFixed(2);
-            document.getElementById("pf").textContent = parseFloat(
-              data.pf || 0
-            ).toFixed(2);
-            document.getElementById("frequency").textContent = parseFloat(
-              data.frequency || 0
-            ).toFixed(2);
-            document.getElementById("totalDays").textContent = parseFloat(
-              data.days || 0
-            ).toFixed(1);
-            document.getElementById("uptime").textContent = parseFloat(
-              data.uptime || 0
-            ).toFixed(1);
+            // Store timestamp
+            const now = Date.now();
+            dataHistory.timestamps.push(now);
+
+            // Update values and store in history
+            const voltage = parseFloat(data.voltage || 0);
+            const current = parseFloat(data.current || 0);
+            const power = parseFloat(data.power || 0);
+            const energy = parseFloat(data.energy || 0);
+            const pf = parseFloat(data.pf || 0);
+            const frequency = parseFloat(data.frequency || 0);
+            const days = parseFloat(data.days || 0);
+            const uptime = parseFloat(data.uptime || 0);
+
+            document.getElementById("voltage").textContent = voltage.toFixed(1);
+            document.getElementById("current").textContent = current.toFixed(2);
+            document.getElementById("power").textContent = power.toFixed(1);
+            document.getElementById("energy").textContent = energy.toFixed(2);
+            document.getElementById("pf").textContent = pf.toFixed(2);
+            document.getElementById("frequency").textContent =
+              frequency.toFixed(2);
+            document.getElementById("totalDays").textContent = days.toFixed(1);
+            document.getElementById("uptime").textContent = uptime.toFixed(1);
+
+            // Store in history
+            dataHistory.voltage.push(voltage);
+            dataHistory.current.push(current);
+            dataHistory.power.push(power);
+            dataHistory.energy.push(energy);
+            dataHistory.pf.push(pf);
+            dataHistory.frequency.push(frequency);
+            dataHistory.days.push(days);
+            dataHistory.uptime.push(uptime);
+
+            // Trim history to max data points
+            if (dataHistory.timestamps.length > maxDataPoints) {
+              Object.keys(dataHistory).forEach((key) => {
+                dataHistory[key].shift();
+              });
+            }
 
             // Update output status
             if (data.mainOutput !== undefined) {
@@ -238,19 +354,24 @@
             }
 
             // Update progress bars
-            updateBar(".voltage-bar", (parseFloat(data.voltage) / 300) * 100);
-            updateBar(".current-bar", (parseFloat(data.current) / 30) * 100);
-            updateBar(".power-bar", (parseFloat(data.power) / 5000) * 100);
-            updateBar(".energy-bar", (parseFloat(data.energy) / 500) * 100);
-            updateBar(
-              ".frequency-bar",
-              ((parseFloat(data.frequency) - 48) / 4) * 100
-            );
-            updateBar(".pf-bar", parseFloat(data.pf) * 100);
-            updateBar(".days-bar", (parseFloat(data.days) / 90) * 100);
-            updateBar(".uptime-bar", (parseFloat(data.uptime) / 24) * 100);
+            updateBar(".voltage-bar", (voltage / 300) * 100);
+            updateBar(".current-bar", (current / 30) * 100);
+            updateBar(".power-bar", (power / 5000) * 100);
+            updateBar(".energy-bar", (energy / 500) * 100);
+            updateBar(".frequency-bar", ((frequency - 48) / 4) * 100);
+            updateBar(".pf-bar", pf * 100);
+            updateBar(".days-bar", (days / 90) * 100);
+            updateBar(".uptime-bar", (uptime / 24) * 100);
 
             updateTimestamp();
+
+            // Update chart if detail view is open
+            if (
+              currentMetric &&
+              document.getElementById("detail-modal").classList.contains("show")
+            ) {
+              updateDetailChart();
+            }
           })
           .catch((error) => console.error("Error:", error));
       }
@@ -337,10 +458,270 @@
         window.location.href = "/firebase";
       }
 
+      // Detail View Functions
+      function openDetailView(metric, name, unit, icon) {
+        currentMetric = metric;
+
+        document.getElementById("detail-icon").textContent = icon;
+        document.getElementById("detail-name").textContent = name;
+        document.getElementById("detail-unit").textContent = unit;
+        document.getElementById("detail-unit-avg").textContent = unit;
+        document.getElementById("detail-unit-min").textContent = unit;
+        document.getElementById("detail-unit-max").textContent = unit;
+
+        updateDetailStats();
+        createChart();
+
+        document.getElementById("detail-modal").classList.add("show");
+      }
+
+      function closeDetailView() {
+        document.getElementById("detail-modal").classList.remove("show");
+        if (chartInstance) {
+          chartInstance.destroy();
+          chartInstance = null;
+        }
+        currentMetric = null;
+      }
+
+      function updateDetailStats() {
+        if (!currentMetric || dataHistory[currentMetric].length === 0) return;
+
+        const data = dataHistory[currentMetric];
+        const current = data[data.length - 1];
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        const min = Math.min(...data);
+        const max = Math.max(...data);
+
+        const decimals =
+          currentMetric === "current" ||
+          currentMetric === "pf" ||
+          currentMetric === "frequency" ||
+          currentMetric === "energy"
+            ? 2
+            : 1;
+
+        document.getElementById("detail-current-value").textContent =
+          current.toFixed(decimals);
+        document.getElementById("detail-avg-value").textContent =
+          avg.toFixed(decimals);
+        document.getElementById("detail-min-value").textContent =
+          min.toFixed(decimals);
+        document.getElementById("detail-max-value").textContent =
+          max.toFixed(decimals);
+      }
+
+      function createChart() {
+        const ctx = document.getElementById("detail-chart").getContext("2d");
+
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+
+        const gradientColors = {
+          voltage: {
+            start: "rgba(255, 206, 0, 0.5)",
+            end: "rgba(255, 206, 0, 0.05)",
+            border: "#ffce00",
+          },
+          current: {
+            start: "rgba(0, 212, 255, 0.5)",
+            end: "rgba(0, 212, 255, 0.05)",
+            border: "#00d4ff",
+          },
+          power: {
+            start: "rgba(255, 71, 87, 0.5)",
+            end: "rgba(255, 71, 87, 0.05)",
+            border: "#ff4757",
+          },
+          energy: {
+            start: "rgba(123, 47, 247, 0.5)",
+            end: "rgba(123, 47, 247, 0.05)",
+            border: "#7b2ff7",
+          },
+          pf: {
+            start: "rgba(0, 255, 127, 0.5)",
+            end: "rgba(0, 255, 127, 0.05)",
+            border: "#00ff7f",
+          },
+          frequency: {
+            start: "rgba(255, 0, 188, 0.5)",
+            end: "rgba(255, 0, 188, 0.05)",
+            border: "#ff00bc",
+          },
+          days: {
+            start: "rgba(89, 255, 0, 0.5)",
+            end: "rgba(89, 255, 0, 0.05)",
+            border: "#59ff00",
+          },
+          uptime: {
+            start: "rgba(255, 159, 64, 0.5)",
+            end: "rgba(255, 159, 64, 0.05)",
+            border: "#ff9f40",
+          },
+        };
+
+        const colors = gradientColors[currentMetric] || gradientColors.voltage;
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, colors.start);
+        gradient.addColorStop(1, colors.end);
+
+        const filteredData = getFilteredData();
+
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: filteredData.labels,
+            datasets: [
+              {
+                label: document.getElementById("detail-name").textContent,
+                data: filteredData.values,
+                borderColor: colors.border,
+                backgroundColor: gradient,
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: colors.border,
+                pointHoverBorderColor: "#fff",
+                pointHoverBorderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              intersect: false,
+              mode: "index",
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                backgroundColor: "rgba(10, 1, 24, 0.9)",
+                titleColor: "#00d4ff",
+                bodyColor: "#fff",
+                borderColor: colors.border,
+                borderWidth: 1,
+                padding: 12,
+                displayColors: false,
+                callbacks: {
+                  title: function (context) {
+                    return context[0].label;
+                  },
+                  label: function (context) {
+                    return (
+                      context.parsed.y.toFixed(2) +
+                      " " +
+                      document.getElementById("detail-unit").textContent
+                    );
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                grid: {
+                  color: "rgba(255, 255, 255, 0.05)",
+                  drawBorder: false,
+                },
+                ticks: {
+                  color: "#7b2ff7",
+                  maxTicksLimit: 8,
+                  font: {
+                    family: "Rajdhani",
+                    size: 12,
+                  },
+                },
+              },
+              y: {
+                grid: {
+                  color: "rgba(255, 255, 255, 0.05)",
+                  drawBorder: false,
+                },
+                ticks: {
+                  color: "#00d4ff",
+                  font: {
+                    family: "Rajdhani",
+                    size: 12,
+                  },
+                  callback: function (value) {
+                    return value.toFixed(1);
+                  },
+                },
+              },
+            },
+            animation: {
+              duration: 750,
+              easing: "easeInOutQuart",
+            },
+          },
+        });
+      }
+
+      function getFilteredData() {
+        if (!currentMetric || dataHistory[currentMetric].length === 0) {
+          return { labels: [], values: [] };
+        }
+
+        const now = Date.now();
+        const timeRangeMs = currentTimeRange * 1000;
+        const cutoffTime = now - timeRangeMs;
+
+        const labels = [];
+        const values = [];
+
+        for (let i = 0; i < dataHistory.timestamps.length; i++) {
+          if (dataHistory.timestamps[i] >= cutoffTime) {
+            const date = new Date(dataHistory.timestamps[i]);
+            labels.push(
+              date.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+                hour12: false,
+              })
+            );
+            values.push(dataHistory[currentMetric][i]);
+          }
+        }
+
+        return { labels, values };
+      }
+
+      function updateDetailChart() {
+        if (!chartInstance || !currentMetric) return;
+
+        const filteredData = getFilteredData();
+        chartInstance.data.labels = filteredData.labels;
+        chartInstance.data.datasets[0].data = filteredData.values;
+        chartInstance.update("none"); // Update without animation for smooth real-time updates
+
+        updateDetailStats();
+      }
+
+      function changeTimeRange(seconds) {
+        currentTimeRange = seconds;
+
+        // Update button states
+        document.querySelectorAll(".time-btn").forEach((btn) => {
+          btn.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        if (chartInstance) {
+          updateDetailChart();
+        }
+      }
+
       // Close dialog on ESC key
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
           closeOutputDialog();
+          closeDetailView();
         }
       });
 
