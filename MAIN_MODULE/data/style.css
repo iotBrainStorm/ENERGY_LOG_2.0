@@ -801,6 +801,108 @@ body {
   box-shadow: 0 5px 20px rgba(123, 47, 247, 0.5);
 }
 
+/* Axis Controls */
+.axis-controls {
+  margin-top: 20px;
+  padding: 20px;
+  background: rgba(0, 212, 255, 0.05);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 12px;
+}
+
+.axis-control-title {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #00d4ff;
+  letter-spacing: 1.5px;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.axis-inputs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.axis-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.axis-input-group label {
+  font-family: "Rajdhani", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+}
+
+.axis-input {
+  width: 100px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 6px;
+  color: #00d4ff;
+  font-family: "Orbitron", sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.axis-input:focus {
+  border-color: #00d4ff;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}
+
+.axis-input::placeholder {
+  color: rgba(0, 212, 255, 0.4);
+}
+
+.axis-btn,
+.axis-btn-reset {
+  padding: 8px 20px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 6px;
+  font-family: "Rajdhani", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.axis-btn {
+  background: linear-gradient(135deg, #7b2ff7 0%, #00d4ff 100%);
+  color: white;
+  border-color: #7b2ff7;
+}
+
+.axis-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(123, 47, 247, 0.4);
+}
+
+.axis-btn-reset {
+  background: rgba(255, 71, 87, 0.1);
+  color: #ff4757;
+  border-color: rgba(255, 71, 87, 0.5);
+}
+
+.axis-btn-reset:hover {
+  background: rgba(255, 71, 87, 0.2);
+  border-color: #ff4757;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(255, 71, 87, 0.3);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .data-grid {
@@ -840,6 +942,25 @@ body {
   .time-btn {
     padding: 8px 15px;
     font-size: 12px;
+  }
+
+  .axis-inputs {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .axis-input-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .axis-input {
+    flex: 1;
+  }
+
+  .axis-btn,
+  .axis-btn-reset {
+    width: 100%;
   }
 }
 

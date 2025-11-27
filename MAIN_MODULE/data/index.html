@@ -273,6 +273,36 @@
             30 Min
           </button>
         </div>
+
+        <div class="axis-controls">
+          <div class="axis-control-title">Y-Axis Range</div>
+          <div class="axis-inputs">
+            <div class="axis-input-group">
+              <label for="y-min">Min:</label>
+              <input
+                type="number"
+                id="y-min"
+                class="axis-input"
+                step="any"
+                placeholder="Auto"
+              />
+            </div>
+            <div class="axis-input-group">
+              <label for="y-max">Max:</label>
+              <input
+                type="number"
+                id="y-max"
+                class="axis-input"
+                step="any"
+                placeholder="Auto"
+              />
+            </div>
+            <button class="axis-btn" onclick="applyAxisRange()">Apply</button>
+            <button class="axis-btn-reset" onclick="resetAxisRange()">
+              Reset
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -293,6 +323,7 @@
       };
       let maxDataPoints = 1800; // 30 minutes at 1 second intervals
       let currentTimeRange = 60; // Default 1 minute
+      let customYAxis = {}; // Store custom Y-axis settings per metric
 
       function updateBar(selector, percentage) {
         const bar = document.querySelector(selector + " .card-bar-fill");
@@ -469,6 +500,21 @@
         document.getElementById("detail-unit-min").textContent = unit;
         document.getElementById("detail-unit-max").textContent = unit;
 
+        // Load saved custom axis values if they exist
+        if (customYAxis[metric]) {
+          document.getElementById("y-min").value =
+            customYAxis[metric].min !== undefined
+              ? customYAxis[metric].min
+              : "";
+          document.getElementById("y-max").value =
+            customYAxis[metric].max !== undefined
+              ? customYAxis[metric].max
+              : "";
+        } else {
+          document.getElementById("y-min").value = "";
+          document.getElementById("y-max").value = "";
+        }
+
         updateDetailStats();
         createChart();
 
@@ -568,7 +614,7 @@
 
         const filteredData = getFilteredData();
 
-        // Set Y-axis range based on metric type
+        // Set Y-axis range - use custom if set, otherwise use defaults
         const yAxisConfig = {
           voltage: { min: 0, max: 300 },
           current: { min: 0, max: 30 },
@@ -580,7 +626,21 @@
           uptime: { min: 0, max: undefined },
         };
 
-        const yAxis = yAxisConfig[currentMetric] || { min: 0, max: undefined };
+        let yAxis = yAxisConfig[currentMetric] || { min: 0, max: undefined };
+
+        // Override with custom values if set
+        if (customYAxis[currentMetric]) {
+          yAxis = {
+            min:
+              customYAxis[currentMetric].min !== undefined
+                ? customYAxis[currentMetric].min
+                : yAxis.min,
+            max:
+              customYAxis[currentMetric].max !== undefined
+                ? customYAxis[currentMetric].max
+                : yAxis.max,
+          };
+        }
 
         chartInstance = new Chart(ctx, {
           type: "line",
@@ -731,6 +791,35 @@
         if (chartInstance) {
           updateDetailChart();
         }
+      }
+
+      function applyAxisRange() {
+        if (!currentMetric) return;
+
+        const minVal = document.getElementById("y-min").value;
+        const maxVal = document.getElementById("y-max").value;
+
+        customYAxis[currentMetric] = {
+          min: minVal !== "" ? parseFloat(minVal) : undefined,
+          max: maxVal !== "" ? parseFloat(maxVal) : undefined,
+        };
+
+        // Recreate chart with new axis settings
+        createChart();
+      }
+
+      function resetAxisRange() {
+        if (!currentMetric) return;
+
+        // Remove custom settings
+        delete customYAxis[currentMetric];
+
+        // Clear input fields
+        document.getElementById("y-min").value = "";
+        document.getElementById("y-max").value = "";
+
+        // Recreate chart with default axis settings
+        createChart();
       }
 
       // Close dialog on ESC key
